@@ -1,0 +1,428 @@
+---
+title: "QUESTION_5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# QUESTION 1
+
+Installing packages
+```{r}
+# Install the follwing packages if not installed already
+install.packages("installr")
+install.packages("mlr3")
+install.packages("mlr3pipelines")
+install.packages("mlr3viz")
+install.packages("mlr3learners")
+install.packages('rmarkdown')
+install.packages("corrplot") # to plot correlation
+install.packages("future")  # to do parallelization
+install.packages("precrec") # to plot roc curve
+```
+
+importing packages
+```{r}
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(mlr3)
+library(mlr3pipelines)
+library(mlr3learners)
+library(mlr3viz)
+library(rmarkdown)
+library(corrplot)
+library(future)
+library(precrec)
+```
+
+# Data wrangling
+
+importing the main dataset
+```{r}
+full_dataset <- read.csv("datasets/full_dataset.csv")
+head(full_dataset)
+```
+
+importing the plane dataset and replacing NA and empty values with true NA so that missing values can be removed easily
+```{r}
+plane_dataset <- read.csv("datasets/plane-data.csv", na.strings = c("", "NA"))
+head(plane_dataset)
+```
+
+```{r}
+# Checking the available columns in full_dataset
+colnames(full_dataset)
+# Checking available columns in plane_dataset
+colnames(plane_dataset)
+```
+
+Removing the X column in full_dataset as it adds no value to our analysis
+```{r}
+full_dataset <- subset(full_dataset, select = -c(X))
+```
+
+Finding the correlation matrix to identify which variables are correlated to help select features and avoid multicolinearity
+```{r}
+corrplot(cor(subset(full_dataset, select = c("Year", "Month", "DayofMonth", "DayOfWeek", "DepTime", "ActualElapsedTime", "CRSElapsedTime", "ArrTime", "CRSArrTime", "ActualElapsedTime", "CRSElapsedTime", "AirTime", "ArrDelay", "DepDelay", "Distance", "TaxiIn","TaxiOut","Cancelled", "Diverted", "CarrierDelay", "WeatherDelay","NASDelay","SecurityDelay","LateAircraftDelay")), method="pearson"), method="color")
+```
+
+```{r}
+#Did not choose diverted as feature since it was all zeros
+table(full_dataset$Diverted)
+```
+
+```{r}
+#Did not choose cancelled as feature since it was all zeros
+table(full_dataset$Cancelled)
+```
+
+Removing unnecessary columns in the plane_dataset
+```{r}
+# Selecting only the tailnum and year columns in the plane_dataset
+plane_dataset <- subset(plane_dataset, select = c(tailnum, year))
+```
+
+Checking for null values in plane_dataset
+```{r}
+colSums(is.na(plane_dataset))
+```
+
+Renaming the plane_dataset tail number column to match that of the full_dataset tail number column so that merging is possible.
+```{r}
+# Using the dplyr rename function to alter column names in the plane_dataset converting 'tailnum' to 'TailNum' and 'year' to 'PlaneManufactureYear'
+plane_dataset_1 <- plane_dataset %>% rename(TailNum=tailnum, PlaneManufactureYear=year)
+head(plane_dataset_1)
+```
+
+Removing unnecessary variables
+```{r}
+rm(plane_dataset)
+```
+
+Merging plane_dataset_1 with the full_dataset to find the PlaneManufactureYear of each flight in the full_dataset
+```{r}
+# Performing an inner join merge between full_dataset and plane_dataset_1 based on "TailNum"
+merged_dataset <- merge(full_dataset, plane_dataset_1, by='TailNum')
+head(merged_dataset)
+```
+
+Removing unnecessary variables
+```{r}
+rm(full_dataset)
+rm(plane_dataset_1)
+gc()
+```
+
+
+Checking for null values in the merged_dataset
+```{r}
+colSums(is.na(merged_dataset))
+```
+
+Checking for empty values in the merged_dataset
+```{r}
+merged_dataset[merged_dataset$PlaneManufactureYear == "",]
+```
+Removing null values in merged_dataset
+```{r}
+merged_dataset <- merged_dataset[!is.na(merged_dataset$PlaneManufactureYear),]
+```
+
+
+Checking the dtypes of the merged_dataset
+```{r}
+str(merged_dataset)
+```
+
+
+Since the PlaneManufactureYear is an object we check that column for non-numerical values and unfeasible year values
+```{r}
+table(merged_dataset$PlaneManufactureYear)
+```
+
+
+Dropping a row if it either contains '0000' or 'None' in the PlaneManufactureYear column of the merged_dataset
+```{r}
+merged_dataset <- merged_dataset[!(merged_dataset$PlaneManufactureYear == '0000' | merged_dataset$PlaneManufactureYear == 'None'),]
+```
+
+Confirming whether '0000' and 'None' PlaneManufactureYear value containing rows were removed
+```{r}
+table(merged_dataset$PlaneManufactureYear)
+```
+
+Filtering the merged_dataset to keep only the necessary variables
+```{r}
+full_dataset_1 <- merged_dataset[,c('Year', 
+                                    'Month', 
+                                    'DayofMonth', 
+                                    'DayOfWeek', 
+                                    'CRSDepTime', 
+                                    'ArrDelay', 
+                                    'DepDelay', 
+                                    'Origin', 
+                                    'Dest',
+                                    'PlaneManufactureYear')]
+head(full_dataset_1)
+```
+
+Removing unecessary variables
+```{r}
+rm(merged_dataset)
+
+```
+
+
+Checking the types of full_dataset_1
+```{r}
+str(full_dataset_1)
+```
+
+Converting the numerical values in months to its corresponding month name 
+```{r}
+full_dataset_1[full_dataset_1$Month == 1, 'Month'] = 'January'
+full_dataset_1[full_dataset_1$Month == 2, 'Month'] = 'February'
+full_dataset_1[full_dataset_1$Month == 3, 'Month'] = 'March'
+full_dataset_1[full_dataset_1$Month == 4, 'Month'] = 'April'
+full_dataset_1[full_dataset_1$Month == 5, 'Month'] = 'May'
+full_dataset_1[full_dataset_1$Month == 6, 'Month'] = 'June'
+full_dataset_1[full_dataset_1$Month == 7, 'Month'] = 'July'
+full_dataset_1[full_dataset_1$Month == 8, 'Month'] = 'August'
+full_dataset_1[full_dataset_1$Month == 9, 'Month'] = 'September'
+full_dataset_1[full_dataset_1$Month == 10, 'Month'] = 'October'
+full_dataset_1[full_dataset_1$Month == 11, 'Month'] = 'November'
+full_dataset_1[full_dataset_1$Month == 12, 'Month'] = 'December'
+
+# Checking the conversion
+table(full_dataset_1$Month)
+```
+
+Creating categorical variables by converting them from integer type to character type
+```{r}
+#Converting Month to character object
+full_dataset_1['Month'] = as.character(full_dataset_1$Month)
+
+#Converting Year to object
+full_dataset_1['Year'] = as.character(full_dataset_1$Year)
+
+#Converting DaysofMonth to character object
+full_dataset_1['DayofMonth'] = as.character(full_dataset_1$DayofMonth)
+
+#Converting DaysOfWeek to character object
+full_dataset_1['DayOfWeek'] = as.character(full_dataset_1$DayOfWeek)
+
+# Checking the conversion
+str(full_dataset_1)
+```
+
+Since we are predicting whether an arrival delay occurs or not, we create an arrival delay status column
+```{r}
+# Creating a categorical variable for the model to predict called "ArrDelayStatus"
+full_dataset_1[full_dataset_1$ArrDelay > 0 , "ArrDelayStatus"] <- "Present"
+full_dataset_1[full_dataset_1$ArrDelay <= 0 , "ArrDelayStatus"] <- "Absent"
+```
+
+Converting the ArrDelayStatus column to a factor so that the "Target column 'ArrDelayStatus' must be a factor or ordered factor" error can be avoided when creating a new task
+```{r}
+full_dataset_1$ArrDelayStatus <- as.factor(full_dataset_1$ArrDelayStatus)
+class(full_dataset_1$ArrDelayStatus)
+```
+
+Removing the ArrDelay column from full_dataset_1 as we cannot use it as a feature since it is highly correlated with DepDelay
+```{r}
+full_dataset_1 <- subset(full_dataset_1, select = -c(ArrDelay))
+```
+
+
+Taking a random sample of 5% from the full_dataset_1 dataframe
+```{r}
+# Using the dplyr sample_frac() function to select a random sample of 50% from the full_dataset_1 dataframe
+full_dataset_50 <- sample_frac(full_dataset_1, size = 0.05)
+
+# Checking the dimension of the random sample
+dim(full_dataset_50)
+
+# Removing unnecessary variables
+#rm(full_dataset_1)
+gc()
+```
+
+# Setting up the model
+
+Parallelizing to reduce computing time during model building
+```{r}
+future::plan(strategy = "multisession")
+```
+
+
+Creating a new task
+```{r}
+# We initiate a new classification task by doing the following:
+# Provide a new Task ID called 'Flight Arrival Delay Status LogisticReg'
+# Specify the dataset that is going to be used
+# Assign ArrDelayStatus as the dependent variable that must be predicted 
+# Specify that "Present" from ArrDelayStatus is the positive category
+task <- TaskClassif$new('Flight Arrival Delay Status LogisticReg', backend=full_dataset_50, target = 'ArrDelayStatus', positive = "Present")
+```
+
+
+Selecting the measure with which our model will be evaluated
+```{r}
+# Selecting the Area Under the Curve as our measure
+# (By default this will be the classification error)
+measure <- msr('classif.auc') 
+```
+
+Specifying the type of model (learning algorithm) that we want to build
+```{r}
+# Using the learner function to choose a logistic regression algorithm which will predict the probability of falling into a particular category
+learner_logisticreg <- lrn('classif.log_reg', predict_type = "prob")
+```
+
+
+
+
+# Setting up the pipeline
+
+Creating a step in the pipeline to identify missing data
+```{r}
+# Creating a step to identify all NULL values in all columns using the shorthand PipeOp Constructor
+mp_missind <- po("missind", affect_columns = NULL, which = "all") # identify missing data
+```
+
+
+Creating a step in the pipeline to impute missing numerical features
+```{r}
+# Creating a step which replaces missing values with the mean and making sure it only affects numerical type columns
+imp_numerical <- po("imputemean", affect_columns = selector_type("numeric"))
+```
+
+Creating a step in the pipeline to scale numerical features
+```{r}
+# Creating a step which transposes and normalizes the data and making sure it only affects numerical type columns
+scale_data <- po("scale", affect_columns = selector_type("numeric")) 
+```
+
+
+Creating a step in the pipeline to impute missing categorical features
+```{r}
+# Creating a step that applies the "out of range (OOR)" imputation method, which replaces all missing values with a new category and making sure it only affects factor type columns  
+imp_factor = po("imputeoor", affect_columns = selector_type("factor"))
+```
+
+Creating a step in the pipeline to one-hot encode categorical features
+```{r}
+# Creating a step that applies one-hot encoding on all categorical features and making sure that it only affects factor type columns
+onehot_encode = po("encode", affect_columns = selector_type("factor"))
+```
+
+
+
+
+# Building the pipeline
+
+Constructing the pipeline by putting together all the individual steps made above
+
+```{r}
+# Making a graph object by using the graph union (gunion) function and inserting the individual pipeline steps specified above
+
+graph <- gunion(list(mp_missind, imp_numerical %>>% imp_factor)) %>>%         # First finding missing values and then imputing                                                                                   the numerical features and then the categorical features      
+                 po("featureunion") %>>%                             # Applying a featureunion step
+  
+                 scale_data %>>%                                     # Scaling the numerical features
+  
+                 onehot_encode %>>%                                       # One-Hot encoding the catgorical features
+    
+                 po(learner_logisticreg)                             # Implementing a logistic regression algorithm  
+
+# Encapsulating the graph object as a learner so that it can be used by mlr3 to perform resampling and do benchmarks  
+graph <- GraphLearner$new(graph)
+```
+
+
+
+
+# Building the model
+
+Setting the seed so that the sample that is to be taken is replicable and results are reproducible by others
+```{r}
+set.seed(1)
+```
+
+Creating the training dataset
+```{r}
+# Making a training dataset using a random sample of 70% of the rows from full_dataset_50 dataframe
+train_dataset <- sample(task$nrow, 0.7 * task$nrow)
+```
+
+Creating the test dataset
+```{r}
+# Making the test dataset by using the setdiff() function which collects all the remaining rows from the full_dataset_50 dataframe which are not in the training dataset
+test_dataset <- setdiff(seq_len(task$nrow), train_dataset)
+```
+
+Training the model
+```{r}
+# Accessing the train method and passing the task specified initially in line 265 and specifying the train_dataset row IDs to be used to train the model
+graph$train(task, row_ids = train_dataset)
+```
+
+
+# Evaluating the model
+
+Testing the model
+```{r}
+# Using the created model to make predictions of the ArrDelayStatus in the rows of the test dataset 
+prediction <- graph$predict(task, row_ids = test_dataset)
+```
+
+Identifying the effectiveness of our model
+```{r}
+# Finding the Area Under the ROC Curve
+prediction$score(measure)
+```
+
+Making a confusion matrix
+```{r}
+prediction$confusion
+```
+
+Plotting the ROC curve for our model
+```{r}
+autoplot(prediction, type = "roc")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

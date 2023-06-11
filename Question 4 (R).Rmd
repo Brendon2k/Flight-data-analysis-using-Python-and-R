@@ -1,0 +1,386 @@
+---
+title: "QUESTION_4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# QUESTION 4
+
+installing packages
+```{r}
+# Install the following packages if not already installed
+install.packages("lubridate")
+install.packages("stringi")
+install.packages("Rtools")
+install.packages("janitor")
+install.packages("vtree")
+install.packages('rmarkdown')
+```
+
+
+importing packages
+```{r}
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(stringi)
+library(janitor)
+library(vtree)
+```
+
+
+importing the main dataset and replacing NA and empty values with true NA
+```{r}
+full_dataset <- read.csv("datasets/full_dataset.csv", na.strings = c("", "NA"))
+head(full_dataset)
+```
+
+Removing the X column as it adds no value to our analysis
+```{r}
+full_dataset <- subset(full_dataset, select = -c(X))
+```
+
+
+Checking the available Columns
+```{r}
+colnames(full_dataset)
+```
+
+
+Checking the types of Year, Month, DayofMonth and CRSDepTime to make sure they are integers
+```{r}
+str(full_dataset)
+```
+
+
+Since all 4 columns are integers we only need to check minimum and maximum values to make sure there aren't any outliers
+```{r}
+# Printing maximum and minimum values of CRSDepTime
+paste("The smallest value for CRSDepTime is", min(full_dataset$CRSDepTime))
+paste("The largest value for CRSDepTime is", max(full_dataset$CRSDepTime))
+
+# Printing maximum and minimum values of Year
+paste("The smallest value for Year is", min(full_dataset$Year))
+paste("The largest value for Year is", max(full_dataset$Year))
+
+# Printing maximum and minimum values of Month
+paste("The smallest value for Months is", min(full_dataset$Month))
+paste("The largest value for Months is", max(full_dataset$Month))
+
+# Printing maximum and minimum values of DayofMonth
+paste("The smallest value for DayofMonth is", min(full_dataset$DayofMonth))
+paste("The largest value for DayofMonth is", max(full_dataset$DayofMonth))
+```
+
+
+We now combine the Year, Month, DayofMonth and CRSDepTime to form a column which shows the exact date and time of estimated departure of each flight
+
+We first extract and convert the minutes portion of CRSDepTime into a string
+```{r}
+# Selecting the integers in the ones and tens place of CRSDepTime and converting it to a string using the stringi package (The stri_sub() function extracts the strings)
+Minutes_CRSDepTime <- stri_sub(as.character(full_dataset$CRSDepTime), -2, -1)
+```
+
+checking the type of Minutes_CRSDepTime
+```{r}
+typeof(Minutes_CRSDepTime)
+```
+
+converting Minutes_CRSDepTime to a list
+```{r}
+Minutes_CRSDepTime_list <- as.list(Minutes_CRSDepTime)
+```
+
+We similarly extract and convert the hours portion of CRSDepTime into a string
+```{r}
+# Selecting the integers in the hundreds and thousands place of CRSDepTime and converting it to a string using the stringi package (The stri_sub() function extracts the strings)
+Hours_CRSDepTime <- stri_sub(as.character(full_dataset$CRSDepTime), 1, -3)
+```
+
+Checking the type of Hours_CRSDepTime
+```{r}
+typeof(Hours_CRSDepTime)
+```
+
+
+Converting Hours_CRSDepTime to a list
+```{r}
+Hours_CRSDepTime_list <- as.list(Hours_CRSDepTime)
+```
+
+
+There might be CRSDepTimes where the thousands and hundreds place does not contain a value (for example 45 which indicates 00:45AM). Therefore these will be saved as empty values in the Hours_CRSDepTime variable. Hence we must locate and replace them with zero to maintain consistency and avoid errors when converting to POSIXct format
+
+
+checking for empty values in Hours_CRSDepTime
+```{r}
+Hours_CRSDepTime_list[Hours_CRSDepTime_list==""]
+```
+
+
+Replacing empty values in Hours_CRSDepTime with '0'
+```{r}
+Hours_CRSDepTime_list[Hours_CRSDepTime_list==""] <- 0
+```
+
+
+Removing unnecessary variables
+```{r}
+rm(Hours_CRSDepTime)
+rm(Minutes_CRSDepTime)
+```
+
+
+Converting DayofMonth to a character and then storing it in a list
+```{r}
+Days_list <- as.list(as.character(full_dataset$DayofMonth))
+```
+
+
+Converting Month to a character and then storing it in a list
+```{r}
+Month_list <- as.list(as.character(full_dataset$Month))
+```
+
+
+Converting Year to a character and then storing it in a list
+```{r}
+Year_list <- as.list(as.character(full_dataset$Year))
+```
+
+
+Adding a column to full_dataset which contains a string with information about the Date and Time of estimated departure of each flight
+```{r}
+# Pasting the Day, Month, Year, Hours and Minutes each separated by a hyphen (-) as a single string for each flight in a new column called CRSDepTime_Datetime
+full_dataset["CRSDepTime_Datetime"] <- paste(Days_list, Month_list, Year_list, Hours_CRSDepTime_list, Minutes_CRSDepTime_list, sep="-")
+```
+
+
+removing unnecessary variables to free up memory
+```{r}
+rm(Days_list)
+rm(Month_list)
+rm(Year_list)
+rm(Hours_CRSDepTime_list)
+rm(Minutes_CRSDepTime_list)
+gc()
+```
+
+
+Converting the CRSDepTime_Datetime column in the full_dataset to a date-time class (POSIXct class)
+```{r}
+# Converting the values in the CRSDepTime_Datetime column from a string to a datetime object by using the as.POSIXct() function and passing through the column to be changed and the format in which strings are present within that column.
+full_dataset$CRSDepTime_Datetime <- as.POSIXct(full_dataset$CRSDepTime_Datetime, format="%d-%m-%Y-%H-%M")
+```
+
+
+Checking if conversion was successful
+```{r}
+# Examining the class of CRSDepTime_Datetime column
+class(full_dataset$CRSDepTime_Datetime)
+# Examining the contents of the first entry in the CRSDepTime_Datetime column. Since POSIXct was used this should be a integer value which records the total number of seconds starting from 1st January 1970. The POSIXct format is a very efficient way of storing date time objects when manipulating extremely large datasets.
+unclass(full_dataset$CRSDepTime_Datetime[[1]])
+```
+
+
+Creating a TotalDelay Column by adding the ArrDelay and DepDelay for each row in the full_dataset
+```{r}
+full_dataset['TotalDelay'] <- full_dataset$ArrDelay + full_dataset$DepDelay
+```
+
+
+We now sort the full_dataset dataframe by time so that all the flights made by each plane are arranged in an organized timeline.
+
+Sorting the flights by CRSDepTime which is in date-time format and grouping by Tail Number
+```{r}
+full_dataset <- full_dataset %>% arrange(CRSDepTime_Datetime) %>% group_by(TailNum)
+```
+
+
+We create the PreviousDelay column by first grouping the TotalDelay by each TailNum and then shifting the entire column down by one row. Hence each row will show the current delay (TotalDelay) and the previous delay (PreviousDelay) of a flight of a specific airplane.
+
+Making previous delays column
+```{r}
+full_dataset['PreviousDelay'] <- full_dataset$TotalDelay
+```
+
+
+Lagging the values of the PreviousDelay column down by 1 row
+```{r}
+# We use the mutate_at() function to implement the lag function on the PreviousDelay column and move it down 1 row
+full_dataset <- full_dataset %>% mutate_at(c("PreviousDelay"), list(lag), n = 1)
+```
+
+
+Checking for null values
+```{r}
+colSums(is.na(full_dataset))
+```
+
+Removing the null values in the PreviousDelay column
+```{r}
+full_dataset <- full_dataset[!is.na(full_dataset$PreviousDelay),]
+```
+
+
+
+# SCATTER PLOT FOR CURRENT DELAY AGAINST PREVIOUS DELAY
+```{r}
+# Initializing ggplot with the full_dataset data frame and selecting the x axis to be PreviousDelay and y axis to be TotalDelay
+ggplot(full_dataset, aes(x = PreviousDelay, y = TotalDelay)) +
+  
+  geom_point(colour="blue", alpha = 0.25) +                          # Plotting a blue scatter plot with point opacity set at 25%
+  
+  xlim(-1300, 4300) +                                                # Limiting the x-axis range
+  ylim(-1300, 4300) +                                                # Limiting the y-axis range
+  
+  ggtitle("Scatterplot for Previous Delay vs Current Delay") +       # Giving the graph a title
+  
+  xlab("Previous Delay (Time in minutes)") +                         # Setting the x-axis labels
+  
+  ylab("Current Delay 
+(Time in minutes)") +                                                # Setting the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"))
+```
+
+
+
+
+
+# CROSS TABULATION FOR PRESENCE OF CURRENT DELAY AND PREVIOUS DELAY
+
+Making a Current Delay Status column which shows whether TotalDelay is greater than or smaller than zero
+```{r}
+full_dataset[full_dataset$TotalDelay > 0, 'CurrentDelayStatus'] <- 'Present'
+full_dataset[full_dataset$TotalDelay <= 0, 'CurrentDelayStatus'] <- 'Absent'
+```
+
+Making a Previous Delay Status column which shows whether PreviousDelay is greater than or smaller than zero
+```{r}
+full_dataset[full_dataset$PreviousDelay > 0, 'PreviousDelayStatus'] <- 'Present'
+full_dataset[full_dataset$PreviousDelay <= 0, 'PreviousDelayStatus'] <- 'Absent'
+```
+
+
+Making a cross tabulation of the variables CurrentDelayStatus and PreviousDelayStatus
+```{r}
+# Making a cross tab using the tabyl() function from the janitor package and getting percentages by rows upto 3 decimal places
+full_dataset_crosstab <- tabyl(full_dataset, PreviousDelayStatus, CurrentDelayStatus) %>% adorn_percentages("row") %>% adorn_pct_formatting(digits = 3)
+full_dataset_crosstab
+```
+
+
+# SCATTER PLOT FOR CURRENT DELAY AGAINST LATE AIRCRAFT DELAY
+
+```{r}
+# Initializing ggplot with the full_dataset data frame and selecting the x axis to be LateAircraftDelay and y axis to be TotalDelay
+ggplot(full_dataset, aes(x = LateAircraftDelay, y = TotalDelay)) +
+  
+  geom_point(colour="blue", alpha = 0.15) +                   # Plotting a blue scatter plot with point opacity set at 15%
+  
+  
+  ggtitle("Scatterplot for Late Aircraft Delay vs Current Delay") +            # Giving the graph a title
+  
+  xlab("Late Aircraft Delay (Time in minutes)") +                              # Setting the x-axis labels
+  
+  ylab("Current Delay 
+(Time in minutes)") +                                                          # Setting the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

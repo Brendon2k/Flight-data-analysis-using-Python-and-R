@@ -1,0 +1,390 @@
+---
+title: "QUESTION_3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# QUESTION 3
+
+installing packages
+```{r}
+# Install the follwing packages if not installed already
+install.packages("hrbrthemes")
+install.packages("Rtools")
+install.packages('pheatmap')
+install.packages('tidyverse')
+install.packages('ComplexHeatmap')
+install.packages('rmarkdown')
+```
+
+
+To avoid the below error we install BiocManager
+"Error: With R version 3.5 or greater, install Bioconductor packages using BiocManager; see https://bioconductor.org/install"
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(version = "3.14")
+```
+
+Installing ComplexHeatmap
+```{r}
+BiocManager::install("ComplexHeatmap")
+```
+
+importing packages
+```{r}
+library(tidyr)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(hrbrthemes)
+library(pheatmap)
+library(ComplexHeatmap)
+library(tidyverse)
+```
+# DATA WRANGLING
+
+importing the main dataset
+```{r}
+full_dataset <- read.csv("datasets/full_dataset.csv")
+```
+
+
+Checking the full_dataset
+```{r}
+head(full_dataset)
+```
+
+
+Removing the X column as it adds no value to our analysis
+```{r}
+full_dataset <- subset(full_dataset, select = -c(X))
+```
+
+
+Checking available columns in the full_dataset
+```{r}
+colnames(full_dataset)
+```
+
+
+importing the airports and replacing NA and empty values with true NA so that missing values can be removed easily
+```{r}
+airports <- read.csv("datasets/airports.csv", na.strings = c("", "NA"))
+```
+
+
+Checking for null values in airports 
+```{r}
+colSums(is.na(airports))
+```
+
+
+Finding list of entries in airports dataset where state has null values
+```{r}
+airports[(is.na(airports$state)),]
+```
+
+
+Checking for duplicate entries in iata column in the airports dataset so that we can cross-reference iata codes and fill in missing values if available
+```{r}
+isTRUE(duplicated(airports$iata))
+```
+
+
+No iata duplicates are found. Hence cannot cross reference within airports dataset and find city or state of null values.
+Hence we can remove null values in city and state.
+
+removing null values in the airports dataset
+```{r}
+airports <- airports[!(is.na(airports$state)),]
+colSums(is.na(airports))
+```
+
+Checking how many states and cities are present in the airports dataset
+```{r}
+table(airports$city)
+table(airports$state)
+```
+
+
+There are 56 states and 2675 cities.
+Therefore states was selected to compare locations.
+
+Dropping unnecessary columns in the full_dataset
+```{r}
+# Selecting only the Year, Origin, Dest columns in the full_dataset
+full_dataset <- subset(full_dataset, select = c(Year, Origin, Dest))
+head(full_dataset)
+```
+
+
+Dropping unnecessary columns in the airports
+```{r}
+airports_1 <- subset(airports, select = c(iata, state))
+head(airports_1)
+```
+
+
+We have now filtered the airports dataset only selecting the variables that we need for the merge. In order to find BOTH Origin state and Destination state of the airports we will need a copy of the airports_1 dataframe
+```{r}
+# Creating a copy of the airports_1 data frame called airports_2
+airports_2 <- data.frame(airports_1)
+
+# Checking if the new copy is in a different memory address
+tracemem(airports_1) == tracemem(airports_2)
+```
+
+
+removing unnecessary variables to clear memory
+```{r}
+rm(airports)
+```
+
+
+We use the airports_1 dataframe to find the Origin State and the airports_2 dataframe to find the Destination State of each flight.
+
+Now we rename the columns of the airports_1 dataframe so that they match the full_dataset. ('iata' becomes 'Origin' and 'state' becomes 'Origin_State')
+```{r}
+# Using the dplyr rename function to alter column names in airports_1
+airports_1 <- airports_1 %>% rename(Origin=iata,
+                                    Origin_State=state)
+
+# Checking the first 5 entries of airports_1 to make sure the columns have been renamed
+```
+
+
+Now we rename the columns of the airports_2 dataframe so that they match the full_dataset. ('iata' becomes 'Dest' and 'state' becomes 'Dest_State')
+```{r}
+# Using the dplyr rename function to alter column names in airports_2
+airports_2 <- airports_2 %>% rename(Dest=iata,
+                                    Dest_State=state)
+
+# Checking the first 5 entries of airports_2 to make sure the columns have been renamed
+head(airports_2)
+
+```
+
+We now merge full_dataset and airports_1 in order to find the Origin State of each flight in the full_dataset
+```{r}
+# Performing an inner join merge between the full dataset and airports_1 based on the Origin 
+merged_dataset <- merge(full_dataset, airports_1, by='Origin')
+```
+
+
+We now merge merged_dataset and airports_2 in order to find the Destination State of each flight in the merged_dataset
+```{r}
+# Performing an inner join merge between the full dataset and airports_2 based on the Dest
+merged_dataset <- merge(merged_dataset, airports_2, by='Dest')
+head(merged_dataset)
+```
+
+
+Checking to make sure there are no null values in the merged_dataset
+```{r}
+colSums(is.na(merged_dataset))
+```
+
+
+Checking if type of Year is integer
+```{r}
+str(merged_dataset)
+```
+
+
+Removing unnecessary variables
+```{r}
+rm(airports_1)
+rm(airports_2)
+rm(full_dataset)
+```
+
+We now split the merged_dataset into two based on year
+```{r}
+# Subsetting the merged_dataset rows from 2006 into a new dataframe called merged_dataset_2006
+merged_dataset_2006 <- merged_dataset[(merged_dataset$Year == 2006),]
+
+# Subsetting the merged_dataset rows from 2007 into a new dataframe called merged_dataset_2007
+merged_dataset_2007 <- merged_dataset[(merged_dataset$Year == 2007),]
+```
+
+Removing unnecessary variables
+```{r}
+rm(merged_dataset)
+```
+
+
+We now find the count of flights that occurred between each state during 2006.
+In order to do that we group the year-wise subsetted dataframe values by Origin State, obtain their value counts for each Destinaion State and unstack it.
+
+```{r}
+# Making the grouped_dataset_2006 by first grouping by origin state and then finding the count of corresponding destination states and finally alphabetically sorting by group and then by destination state
+grouped_dataset_2006 <- merged_dataset_2006 %>% group_by(Origin_State) %>% count(Dest_State) %>% dplyr::arrange(Origin_State, Dest_State, .by_group = TRUE)
+
+# unstacking the grouped_dataset_2006 and then alphabetically sorting by destination state and filling missing values with 0
+grouped_dataset_2006 <- grouped_dataset_2006 %>% pivot_wider(names_from = Origin_State, values_from = n, values_fill = 0) %>% dplyr::arrange(Dest_State)
+```
+
+```{r}
+# Making the grouped_dataset_2007 by first grouping by origin state and then finding the count of corresponding destination states and finally alphabetically sorting by group and then by destination state
+grouped_dataset_2007 <- merged_dataset_2007 %>% group_by(Origin_State) %>% count(Dest_State) %>% dplyr::arrange(Origin_State, Dest_State, .by_group = TRUE)
+
+# unstacking the grouped_dataset_2007 and then alphabetically sorting by destination state and filling missing values with 0
+grouped_dataset_2007 <- grouped_dataset_2007 %>% pivot_wider(names_from = Origin_State, values_from = n, values_fill = 0) %>% dplyr::arrange(Dest_State)
+```
+
+
+Removing unnecessary variables
+```{r}
+rm(merged_dataset_2006)
+rm(merged_dataset_2007)
+```
+
+Checking the shape of the year-wise grouped dataframes
+```{r}
+dim(grouped_dataset_2006)
+dim(grouped_dataset_2007)
+```
+
+Checking the type of grouped_dataframe_2006 and grouped_dataframe_2007
+```{r}
+typeof(grouped_dataset_2007)
+typeof(grouped_dataset_2006)
+```
+
+
+Checking the column and row names of grouped_dataframe_2006 and grouped_dataframe_2007
+```{r}
+colnames(grouped_dataset_2006)
+rownames(grouped_dataset_2006)
+```
+
+
+Checking the class of each column in grouped_dataframe_2006 to avoid "Error in FUN(left, right) : non-numeric argument to binary operator"
+```{r}
+
+# Iterating through each column in the grouped_dataset_2006 dataframe and printing the class of each column
+for (column in colnames(as.data.frame(grouped_dataset_2006))){
+  print(class(as.data.frame(grouped_dataset_2006)[,column]))
+}
+
+# removing the column variable created by the for loop
+rm(column)
+```
+
+
+Checking the class of each column in grouped_dataframe_2007 to avoid "Error in FUN(left, right) : non-numeric argument to binary operator"
+```{r}
+# Iterating through each column in the grouped_dataset_2007 dataframe and printing the class of each column
+for (column in colnames(as.data.frame(grouped_dataset_2007))){
+  print(class(as.data.frame(grouped_dataset_2007)[,column]))
+}
+
+# removing the column variable created by the for loop
+rm(column)
+```
+
+It can be seen that the first column in grouped_dataset_2006 and grouped_dataset_2007 is a character. Having this column will make subtracting the 2 datasets very difficult. Therefore to achieve all numeric values in the dataframes we change the first column into the row index.
+```{r}
+grouped_dataset_2006 <- grouped_dataset_2006 %>% remove_rownames() %>% column_to_rownames(var = 'Dest_State')
+grouped_dataset_2007 <- grouped_dataset_2007 %>% remove_rownames() %>% column_to_rownames(var = 'Dest_State')
+```
+
+
+Since the year-wise grouped dataframes have similar shapes, we can subtract both of them to find the change in number of flights that occured between 2006 and 2007
+```{r}
+subtracted_dataset <- grouped_dataset_2007 - grouped_dataset_2006
+```
+
+
+Removing unnecessary variables to clear memory
+```{r}
+rm(grouped_dataset_2006)
+rm(grouped_dataset_2007)
+```
+
+Saving the subtracted_dataset
+```{r}
+write.csv(subtracted_dataset, "output/subtracted_dataset_R.csv")
+```
+
+
+# HEATMAP FOR THE CHANGE IN NUMBER OF FLIGHTS BETWEEN EACH STATE BETWEEN THE YEARS 2006 AND 2007
+
+Now we Visualize the difference in a heatmap
+```{r}
+pheatmap(subtracted_dataset, color= colorRampPalette(c("red", "white", "navy"))(50), display_numbers = F, cluster_rows = FALSE, cluster_cols = FALSE)
+```
+
+
+The above heatmap only visualizes 3 significant areas which all have 4-figure values. Let us introduce a weighted index so that we get more hotspots of other areas with significant changes in number of flights.
+
+Finding the largest value for change in number of flights (can be positive or negative)
+```{r}
+# Finding the maximum value of subtracted_dataset
+max(subtracted_dataset)
+# Finding the minimum value of subtracted_dataset
+min(subtracted_dataset)
+```
+
+
+We can see that the greatest change in number of flights is -20197 flights (Texas-Texas). Hence we divide each value in the subtracted_dataset data frame by 20197 to get weighted ratios. Thereby allowing us to restrict our heatmap range from -1 to +1
+```{r}
+# Dividing each value in the subtracted_dataset data frame by 20197 and making a new data frame called subtracted_dataset_ratios
+subtracted_dataset_ratios <- subtracted_dataset/20197
+```
+
+
+
+
+# HEATMAP FOR THE CHANGE IN NUMBER OF FLIGHTS BETWEEN EACH STATE BETWEEN THE YEARS 2006 AND 2007 REPRESENTED AS WEIGHTED RATIOS
+
+Converting the data frame to a matrix so that it can be used in the pheatmap function
+```{r}
+subtracted_dataset_ratios_matrix <- as.matrix.data.frame(subtracted_dataset_ratios)
+```
+
+Making a variable which holds the color scheme for the heatmap
+```{r}
+col_fun =colorRampPalette(c("red", "white", "navy"))(255)
+```
+
+
+Creating breaks to anchor the minimum and maximum threshold of the heatmap at -0.25 and +0.25 respectively
+```{r}
+weighted_ratio_breaks= c(-0.25, 0.25)
+```
+
+
+Now we create a heatmap with the maximum and minimum threshold anchored at +0.25 and -0.25 respectively so that the locations with a number of change in flights that are 25% or higher than that of Texas show up as hot-spots on the heatmap
+```{r}
+pheatmap(subtracted_dataset_ratios_matrix, name = "Question 3", color= col_fun, breaks = weighted_ratio_breaks, row_title="Origin State", row_title_side="left", column_title='Destination State', column_title_side='bottom', display_numbers = F, cluster_rows = FALSE, cluster_cols = FALSE)
+```
+
+
+Removing unnecessary variables to clear memory
+```{r}
+rm(col_fun)
+rm(weighted_ratio_breaks)
+rm(subtracted_dataset_ratios)
+rm(subtracted_dataset_ratios_matrix)
+```
+
+The subtracted_dataset has not been removed from memory as it can be used to cross reference the hot spots in the heatmap and find the exact values of changes in flights.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

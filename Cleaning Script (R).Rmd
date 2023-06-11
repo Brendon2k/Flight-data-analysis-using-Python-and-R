@@ -1,0 +1,133 @@
+---
+title: "coursework_cleaning"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# DATA PREPROCESSING
+
+Installing the required packages
+```{r}
+# Install the follwing packages if not installed already 
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("rmarkdown")
+```
+
+importing packages
+```{r}
+library(rmarkdown)
+library(dplyr)
+
+```
+
+
+importing the datasets and assigning NA and empty values with true NA so that missing values can be removed easily
+```{r}
+# importing the datasets and replacing NA and empty values with NA
+dataset2006 <- read.csv("datasets/2006.csv", na.strings = c("", "NA"))
+dataset2007 <- read.csv("datasets/2007.csv", na.strings = c("", "NA"))
+```
+
+
+Checking the class of dataset2006 and dataset2007 
+```{r}
+class(dataset2006)
+class(dataset2007)
+```
+
+
+Finding the dimensions of dataset2006 and dataset2007 to see if they can be merged
+```{r}
+dim(dataset2006)
+dim(dataset2007)
+```
+
+Creating the full dataset
+```{r}
+# Merging the 2006 and 2007 datasets using rbind
+full_dataset <- rbind(dataset2006, dataset2007)
+```
+
+
+Finding the dimensions of the full_dataset
+```{r}
+dim(full_dataset)
+```
+
+
+Removing dataset2006 and dataset2007 to free memory
+```{r}
+rm(dataset2006)
+rm(dataset2007)
+```
+
+
+Finding the column names of the full_dataset
+```{r}
+colnames(full_dataset)
+```
+
+
+Checking the full_dataset dataframe for null values
+```{r}
+colSums(is.na(full_dataset))
+```
+
+
+Removing null values from ArrDelay
+```{r}
+full_dataset <- full_dataset[!is.na(full_dataset$ArrDelay),]
+```
+
+
+Checking for null values
+```{r}
+colSums(is.na(full_dataset))
+```
+
+
+Dropping the CancellationCode column 
+```{r}
+full_dataset <- subset(full_dataset, select = -c(CancellationCode))
+```
+
+
+Checking the new shape of full_dataset data frame
+```{r}
+dim(full_dataset)
+```
+
+
+Viewing the top rows in full_dataset
+```{r}
+head(full_dataset)
+```
+
+
+Checking for duplicate rows
+```{r}
+head(full_dataset[duplicated(full_dataset),])
+```
+
+
+
+Dropping duplicate rows in full_dataset
+```{r}
+full_dataset <- distinct(full_dataset)
+```
+
+
+Saving the cleaned dataset
+```{r}
+write.csv(full_dataset,"full_dataset.csv")
+```
+
+
+
+

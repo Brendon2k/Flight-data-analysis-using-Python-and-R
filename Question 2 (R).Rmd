@@ -1,0 +1,250 @@
+---
+title: "QUESTION_2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# QUESTION 2
+
+# PREPARING THE DATASET
+
+Installing the required packages
+```{r}
+# Install the follwing packages if not installed already
+install.packages("installr")
+install.packages("Rtools")
+install.packages("rmarkdown")
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("plotly")
+install.packages("ggplot2")
+```
+
+importing packages
+```{r}
+library(dplyr)
+library(plotly)
+library(ggplot2)
+```
+
+
+importing the main dataset and assigning NA and empty values with true NA so that missing values can be removed easily
+```{r}
+full_dataset <- read.csv("datasets/full_dataset.csv", na.strings = c("", "NA"))
+```
+
+Removing the X column in the full_dataset as it adds no value to our analysis
+```{r}
+full_dataset <- subset(full_dataset, select = -c(X))
+
+```
+
+Checking available columns in full_dataset
+```{r}
+colnames(full_dataset)
+```
+
+importing the plane dataset and replacing NA and empty values with true NA so that missing values can be removed easily
+```{r}
+plane_dataset <- read.csv("datasets/plane-data.csv", na.strings = c("", "NA"))
+```
+
+Checking available columns in plane_dataset
+```{r}
+colnames(plane_dataset)
+```
+
+
+Removing unnecessary columns in the full_dataset
+```{r}
+# Selecting only the TailNum, ArrDelay, DepDelay columns in the full_dataset
+full_dataset <- subset(full_dataset, select = c(TailNum, ArrDelay, DepDelay))
+head(full_dataset)
+```
+
+
+Removing unnecessary columns in the plane_dataset
+```{r}
+# Selecting only the tailnum and year columns in the plane_dataset
+plane_dataset <- subset(plane_dataset, select = c(tailnum, year))
+head(plane_dataset)
+```
+
+
+Checking for null values in plane_dataset
+
+```{r}
+colSums(is.na(plane_dataset))
+```
+
+Removing the null values in the plane_dataset
+```{r}
+plane_dataset <- plane_dataset[!is.na(plane_dataset$year),]
+colSums(is.na(plane_dataset))
+
+```
+
+Making a copy of the plane dataset is not required in R but it is required in python.
+
+Renaming the plane_dataset tail number column to match that of the full_dataset tail number column so that merging is possible.
+```{r}
+# Renaming the 'tailnum' column to 'TailNum' in the plane_dataset
+plane_dataset_1 <- plane_dataset %>% rename(TailNum=tailnum)
+head(plane_dataset_1)
+```
+
+Removing unnecessary variables
+```{r}
+rm(plane_dataset)
+```
+
+
+Merging plane_dataset_1 with the full_dataset based on Tail Number
+```{r}
+merged_dataset <- merge(full_dataset, plane_dataset_1, by='TailNum')
+head(merged_dataset)
+```
+
+
+Checking for null values in the merged_dataset
+```{r}
+colSums(is.na(merged_dataset))
+```
+
+
+Checking the dtypes of the merged_dataset
+```{r}
+str(merged_dataset)
+```
+
+
+Since the year is an object we check the year column for non-numerical values and unfeasible year values
+```{r}
+table(merged_dataset$year)
+```
+
+
+Removing the '0000' and 'None' values from the year column in the merged_dataset
+```{r}
+merged_dataset <- merged_dataset[!(merged_dataset$year == '0000' | merged_dataset$year == 'None' ),]
+table(merged_dataset$year)
+```
+
+Now the year column can be converted to an integer as it is now only comprised of numerics 
+```{r}
+# Converting the year variable from an object to an integer
+merged_dataset$year <- as.integer(merged_dataset$year)
+# Checking the dtypes of the merged_dataset to make sure year is now an integer variable
+str(merged_dataset)
+```
+
+
+
+# CONSTRUCTING A LINE PLOT TO COMPARE THE AVERAGE ARRIVAL DELAY AGAINST PLANE MANUFACTURE YEAR
+
+Making a variable which holds the data frame containing the mean Arrival Delay (ArrDelay) grouped by Plane Manufactured Year (year)
+```{r}
+avg_ArrDelay_plane_year <- merged_dataset %>% group_by(year) %>% summarise(mean_ArrDelay = mean(ArrDelay), .groups = 'drop')
+```
+
+
+Assigning a variable to hold the overall mean of Arrival Delays
+```{r}
+avg_ArrDelay <- mean(merged_dataset$ArrDelay)
+```
+
+Plotting the line graph
+```{r}
+# Initializing ggplot with the avg_ArrDelay_plane_year data frame and selecting the x axis to be Plane Manufacture Years (year) and y axis to be the mean arrival delay
+ggplot(avg_ArrDelay_plane_year, aes(x = year, y = mean_ArrDelay)) +
+  
+  geom_line(colour = "blue") +                                    # Plotting a line graph 
+  
+  geom_hline(yintercept = avg_ArrDelay,  colour = "red", ) +      # Plotting a reference line (the overall average arrival delay)
+  
+  scale_x_continuous(breaks = seq(1955,2011,5)) +                 # Formatting x axis tick labels
+  scale_y_continuous(breaks = seq(6,14,1)) +                      # Formatting y axis tick labels
+  
+  ggtitle("Line Plot for Average Arrival Delay by Plane Manufactured Year") +             # Giving the graph a title
+  
+  xlab("Plane Manufactured Year") +                               # Setting the x-axis labels
+  
+  ylab("Average Arrival Delay
+(Time in minutes)") +                                             # Setting the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"))
+```
+  
+
+Saving the line graph
+```{r}
+ggsave('output/line_plot_for_average_arrdelay_vs_planemanufactureyear.png')
+```
+
+
+Removing unnecessary variables from memory
+```{r}
+rm(avg_ArrDelay_plane_year)
+rm(merged_dataset)
+rm(plane_dataset_1)
+rm(full_dataset)
+rm(avg_ArrDelay)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

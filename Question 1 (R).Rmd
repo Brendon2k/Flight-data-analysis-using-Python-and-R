@@ -1,0 +1,644 @@
+---
+title: "QUESTION_1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# QUESTION 1
+
+# PREPARING THE DATASET
+
+Installing the required packages
+```{r}
+# Install the follwing packages if not installed already
+install.packages("installr")
+install.packages("Rtools")
+install.packages("rmarkdown")
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("plotly")
+install.packages("ggplot2")
+
+```
+
+Importing packages
+```{r}
+library(rmarkdown)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(tidyverse)
+library(tidyr)
+```
+
+Importing the main dataset
+```{r}
+full_dataset <- read.csv("datasets/full_dataset.csv")
+```
+
+Checking the full_dataset
+```{r}
+# Viewing the first 5 rows of the full_dataset
+head(full_dataset)
+```
+
+Removing the X column in the full_dataset as it adds no value to our analysis
+```{r}
+full_dataset <- subset(full_dataset, select = -c(X))
+
+```
+
+Checking available columns
+```{r}
+colnames(full_dataset)
+```
+
+
+Finding the correlation of ArrDelay and DepDelay
+```{r}
+# Subsetting only the ArrDelay and DepDelay column and finding the pearson correlation matrix for ArrDelay and DepDelay
+cor(subset(full_dataset, select = c(ArrDelay, DepDelay)),method = "pearson")
+```
+
+# BEST TIME OF YEAR TO FLY TO MINIMIZE DELAYS
+
+Checking for errors in Month column
+```{r}
+# Checking for smallest and largest values as well as outliers in Months column
+
+# Obtaining the minimum value in the month column
+paste("The smallest value for Months is", min(full_dataset$Month))
+# Obtaining the maximum value in the month column
+paste("The largest value for Months is", max(full_dataset$Month))
+# Obtaining a table for the value counts of each month
+table(full_dataset$Month)
+```
+Making a dataframe for mean and median Arrival Delay and Departure Delay for each month
+```{r}
+# Using the dplyr pipe operator we first group the data by month and then create summarizing variables which show the mean and median for ArrDelay and DepDelay
+full_dataset %>% group_by(Month) %>% 
+  summarise(mean_ArrDelay = mean(ArrDelay),
+            median_ArrDelay = median(ArrDelay),
+            mean_DepDelay = mean(DepDelay),
+            median_DepDelay = median(DepDelay), .groups = 'drop')
+
+```
+## CONSTRUCTING A LINE PLOT TO SHOW HOW AVERAGE ARRIVAL DELAY VARIES ACROSS MONTHS
+
+Making a variable which holds the dataframe containing the mean Arrival Delay (ArrDelay) grouped by Month
+```{r}
+# Grouping the data by month and calculating the average ArrDelay for each month and storing it in a variable called full_dataset_meandelay
+full_dataset_meandelay <- full_dataset %>% group_by(Month) %>% summarise(mean_ArrDelay_month = mean(ArrDelay))
+full_dataset_meandelay
+```
+
+
+Assigning a variable to hold the mean of all Arrival Delays
+```{r}
+avg_ArrDelay <- mean(full_dataset$ArrDelay)
+```
+
+
+Plotting the line graph
+```{r}
+# Initializing ggplot with the full_dataset_meandelay data frame and selecting the x axis to be months and y axis to be the mean arrival delay
+ggplot(full_dataset_meandelay, aes(x = Month, y = mean_ArrDelay_month)) +
+  
+  geom_line(colour = "blue") +                                 # Plotting a line graph 
+  
+  geom_hline(yintercept = avg_ArrDelay,  colour = "red", ) +   # Plotting a reference line (the overall average arrival delay)
+  
+  scale_x_continuous(breaks = seq(0,12,1)) +                   # Formatting x axis tick labels
+  scale_y_continuous(breaks = seq(6,14,1)) +                   # Formatting y axis tick labels
+  
+  ggtitle("Line Plot for Average Arrival Delay by Month") +    # Giving the graph title
+  
+  xlab("Months") +                                             # Creating the x-axis labels
+  
+  ylab("Average Arrival Delay
+(Time in minutes)") +                                          # Creating the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+  
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+  
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+  
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+    
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+  
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+  
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+  
+        panel.grid.minor.y = element_blank(),
+  
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"))
+```
+Saving the line graph
+```{r}
+ggsave('output/line_plot_for_average_arrdelay_vs_month.png')
+```
+Removing full_dataset_meandelay from memory
+```{r}
+rm(full_dataset_meandelay)
+```
+
+
+
+
+## CONSTRUCTING A LINE PLOT FOR THE CAUSAL FACTORS OF AVERAGE DELAY BY MONTH
+
+Filtering the dataset to obtain relevant delays
+```{r}
+delay_month_df <- subset(full_dataset, select = c(Month, CarrierDelay, WeatherDelay, NASDelay, SecurityDelay, LateAircraftDelay))
+```
+
+
+Making a data frame which holds the average CarrierDelay, WeatherDelay, NASDelay, SecurityDelay and LateAircraftDelay grouped by month
+```{r}
+delay_month_df <- delay_month_df %>% group_by(Month) %>% summarise(mean_CarrierDelay = mean(CarrierDelay),
+                                                                   mean_WeatherDelay = mean(WeatherDelay),
+                                                                   mean_NASDelay = mean(NASDelay),
+                                                                   mean_SecurityDelay = mean(SecurityDelay),
+                                                                   mean_LateAircraftDelay = mean(LateAircraftDelay)) 
+delay_month_df
+```
+
+
+Converting delay_month_df to long format so that each delay can be categorized and visualized by colour using ggplot
+```{r}
+# Making a variable df2 which holds the long format of the delay_month_df variable
+df2 <- delay_month_df %>% pivot_longer(cols = c(mean_CarrierDelay, mean_WeatherDelay, mean_NASDelay, mean_SecurityDelay, mean_LateAircraftDelay))
+```
+
+Checking the type and column names of df2
+```{r}
+typeof(df2)
+colnames(df2)
+```
+
+
+Plotting the line graphs 
+```{r}
+# Initializing ggplot with the df2 data frame and selecting the x axis to be months and y axis to be the value of the delay and categorizing each type of delay by colour
+ggplot(df2, aes(x = Month, y = value, colour = name)) +
+  
+  geom_line(size=0.75)+                                                                # Plotting a line graph
+  
+  scale_x_continuous(breaks = seq(0,12,1)) +                                           # Formatting x axis tick labels
+  scale_y_continuous(breaks = seq(0,7,1)) +                                            # Formatting y axis tick labels
+  
+  ggtitle("Line Plot for Causal Factors of Average Arrival Delay by Month") +          # Setting the graph title
+  
+  xlab("Months") +                                                                     # Creating the x-axis labels
+  
+  ylab("Average Arrival Delay
+(Time in minutes)") +                                                                  # Creating the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted', colour = "grey"))
+```
+
+
+Saving the line graph
+```{r}
+ggsave('output/line_plot_for_cause_of_average_arrdelay_vs_month.png')
+```
+
+
+Removing unnecessary variables from memory
+```{r}
+rm(df2)
+rm(delay_month_df)
+```
+
+
+
+# BEST TIME OF WEEK TO FLY TO MINIMIZE DELAYS
+
+Checking for errors in DayOfWeek column
+```{r}
+# Checking for smallest and largest values aswell as outliers in DayOfWeek column
+
+# Obtaining the minimum value in the DayOfWeek column
+paste("The smallest value for DayOfWeek is", min(full_dataset$DayOfWeek))
+# Obtaining the maximum value in the DayOfWeek column
+paste("The largest value for DayOfWeek is", max(full_dataset$DayOfWeek))
+# Obtaining a table for the value counts of each Day Of the Week
+table(full_dataset$DayOfWeek) 
+```
+Constructing a dataframe for mean and median Arrival Delay and Departure Delay which are grouped by DayOfWeek
+```{r}
+full_dataset %>% group_by(DayOfWeek) %>% 
+  summarise(mean_ArrDelay = mean(ArrDelay),
+            median_ArrDelay = median(ArrDelay),
+            mean_DepDelay = mean(DepDelay),
+            median_DepDelay = median(DepDelay), .groups = 'drop') 
+```
+## CONSTRUCTING A LINE PLOT TO SHOW HOW AVERAGE ARRIVAL DELAY VARIES ACROSS DAYS OF THE WEEK
+
+Making a variable which holds the dataframe containing the mean Arrival Delay (ArrDelay) grouped by DayOfWeek
+```{r}
+full_dataset_meandelay <- full_dataset %>% group_by(DayOfWeek) %>% summarise(mean_ArrDelay_DayOfWeek = mean(ArrDelay))
+full_dataset_meandelay
+
+```
+Plotting the line graph
+```{r}
+# Initializing ggplot with the full_dataset_meandelay data frame and selecting the x axis to be days of the week and y axis to be the mean arrival delay by day of the week
+ggplot(full_dataset_meandelay, aes(x = DayOfWeek, y = mean_ArrDelay_DayOfWeek)) +
+  
+  geom_line(colour = "blue") +                                                    # Plotting the line graph
+  
+  geom_hline(yintercept = avg_ArrDelay,  colour = "red", ) +          # Plotting a reference line (overall average arrival delay)
+  
+  scale_x_continuous(breaks = seq(0,12,1)) +
+  scale_y_continuous(breaks = seq(6,14,1)) +
+  
+  ggtitle("Line Plot for Average Arrival Delay by Day of the Week") +             # Setting the title
+  
+  xlab("Day of the Week") +                                                       # Creating the x-axis labels
+  
+  ylab("Average Arrival Delay
+(Time in minutes)") +                                                             # Creating the y-axis labels
+  
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"))  
+```
+
+
+Saving the line graph
+```{r}
+ggsave('output/line_plot_for_average_arrdelay_vs_dayofweek.png')
+```
+
+
+removing full_dataset_meandelay from memory
+```{r}
+rm(full_dataset_meandelay)
+```
+
+
+
+
+## CONSTRUCTING A LINE PLOT FOR THE CAUSAL FACTORS OF AVERAGE DELAY BY DAY OF THE WEEK
+
+Filtering the dataset to obtain relevant delays
+```{r}
+delay_DayOfWeek_df <- subset(full_dataset, select = c(DayOfWeek, CarrierDelay, WeatherDelay, NASDelay, SecurityDelay, LateAircraftDelay))
+```
+
+
+Making a dataframe which holds the average CarrierDelay, WeatherDelay, NASDelay, SecurityDelay and LateAircraftDelay grouped by month
+```{r}
+delay_DayOfWeek_df <- delay_DayOfWeek_df %>% group_by(DayOfWeek) %>% summarise(mean_CarrierDelay = mean(CarrierDelay),
+                                                                       mean_WeatherDelay = mean(WeatherDelay),
+                                                                       mean_NASDelay = mean(NASDelay),
+                                                                       mean_SecurityDelay = mean(SecurityDelay),
+                                                                       mean_LateAircraftDelay = mean(LateAircraftDelay)) 
+delay_DayOfWeek_df
+```
+
+
+
+Converting delay_DayOfWeek_df to long format so that each delay can be categorized and visualized by colour using ggplot
+```{r}
+# Making a variable df2 which holds the long format of the delay_DayOfWeek_df variable
+df2 <- delay_DayOfWeek_df %>% pivot_longer(cols = c(mean_CarrierDelay, mean_WeatherDelay, mean_NASDelay, mean_SecurityDelay, mean_LateAircraftDelay))
+```
+Checking the type and column names of df2
+```{r}
+typeof(df2)
+colnames(df2)
+```
+
+
+Plotting the line graphs 
+```{r}
+# Initializing ggplot with the df2 data frame and selecting the x axis to be DayOfWeek and y axis to be the value of the delay and categorizing each type of delay by colour
+ggplot(df2, aes(x = DayOfWeek, y = value, colour = name)) +
+  
+  geom_line(size=0.75)+                                                                 # Plotting the line graphs
+  
+  scale_x_continuous(breaks = seq(0,7,1)) +
+  scale_y_continuous(breaks = seq(0,7,1)) +                                             # Formatting the x and y axis tick labels
+  
+  ggtitle("Line Plot for Causal Factors of Average Arrival Delay by Day of the Week") + # Setting the title
+  
+  xlab("Day of the Week") +                                                             # Creating the x-axis labels
+  
+  ylab("Average Arrival Delay
+(Time in minutes)") +                                                                   # Creating the y-axis labels
+  
+  # Formatting the titles, texts, background and gridlines
+  theme(plot.title=element_text(family="mono", 
+                                face="bold", 
+                                size=10,
+                                hjust = 0.5,
+                                margin = margin(t = 0, r = 0, b = 5, l = 0)),
+        
+        axis.title.x=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 20, r = 0, b = 10, l = 0)),
+        
+        axis.title.y=element_text(family="mono",
+                                  size=12,
+                                  margin = margin(t = 0, r = 20, b = 0, l = 10)),
+        
+        axis.text.x = element_text(colour="#ef4343",
+                                   size = 10),
+        
+        axis.text.y = element_text(colour="#ffc000",
+                                   size = 10),
+        
+        panel.background = element_rect(fill = "white", 
+                                        colour = "black",
+                                        size = 1, 
+                                        linetype = "solid"),
+        
+        panel.grid.major.y = element_line(size = 0.25, 
+                                          linetype = 'dotted',
+                                          colour = "grey"), 
+        
+        panel.grid.minor.y = element_blank(),
+        
+        panel.grid.major.x = element_line(size = 0.25, 
+                                          linetype = 'dotted', colour = "grey"))
+```
+
+Saving the line graph
+```{r}
+ggsave('output/line_plot_for_cause_of_average_arrdelay_vs_dayofweek.png')
+```
+
+Removing unnecessary variables from memory
+```{r}
+rm(df2)
+rm(delay_DayOfWeek_df)
+```
+
+
+
+
+# BEST TIME OF DAY TO FLY TO MINIMIZE DELAYS
+
+We analyze using CRSDepTime since customers can only choose from scheduled departure times
+
+Checking for errors in CRSDepTime column
+
+```{r}
+# Finding the smallest and largest values CRSDepTime column
+paste("The smallest value for CRSDepTime is", min(full_dataset$CRSDepTime))
+paste("The largest value for CRSDepTime is", max(full_dataset$CRSDepTime))
+```
+
+Checking the type of CRSDepTime
+```{r}
+typeof(full_dataset$CRSDepTime)
+```
+ 
+Making 8 bins which are spaced 3 hours apart to categorize each time of day
+```{r}
+# Making a list which holds 8 intervals of different times of day of their corresponding Arrival Delays
+delay_TimeOfDay = list(full_dataset[(full_dataset$CRSDepTime >= 0000.0 & full_dataset$CRSDepTime < 0300.0),]$ArrDelay, 
+                       full_dataset[(full_dataset$CRSDepTime >= 0300.0 & full_dataset$CRSDepTime < 0600.0),]$ArrDelay, 
+                       full_dataset[(full_dataset$CRSDepTime >= 0600.0 & full_dataset$CRSDepTime < 0900.0),]$ArrDelay,
+                       full_dataset[(full_dataset$CRSDepTime >= 0900.0 & full_dataset$CRSDepTime < 1200.0),]$ArrDelay,
+                       full_dataset[(full_dataset$CRSDepTime >= 1200.0 & full_dataset$CRSDepTime < 1500.0),]$ArrDelay,
+                       full_dataset[(full_dataset$CRSDepTime >= 1500.0 & full_dataset$CRSDepTime < 1800.0),]$ArrDelay,
+                       full_dataset[(full_dataset$CRSDepTime >= 1800.0 & full_dataset$CRSDepTime < 2100.0),]$ArrDelay,
+                       full_dataset[(full_dataset$CRSDepTime >= 1800.0 & full_dataset$CRSDepTime <= 2400.0),]$ArrDelay)
+```
+
+## CONSTRUCTING A BOXPLOT FOR ARRIVAL DELAY BY TIME OF DAY
+```{r}
+# Setting the plot to default settings
+par(mar = c(6.1, 4.1, 4.1, 4.1), # changing the margins
+    lwd = 1, # setting the thickness of the lines
+    cex.axis = 0.5 # changing axis label sizes
+)
+
+# Plotting the boxplot
+box_plot <- boxplot(delay_TimeOfDay, xaxt = "n", ylim=c(-75,75))
+
+# Creating the x axis
+axis(side = 1, labels = FALSE)
+
+text(x = 1:length(delay_TimeOfDay),
+     y = par("usr")[3] -3.0,                  # Drawing labels at the bottom of the chart.
+     labels = c('0000h-0300h',      # Using the names of the 8 time intervals from the delay_TimeOfDay list as the x axis labels.
+                '0300h-0600h', 
+                '0600h-0900h',
+                '0900h-1200h',
+                '1200h-1500h',
+                '1500h-1800h',
+                '1800h-2100h',
+                '2100h-0000h'),
+     xpd = NA,                                # Changing the clipping region to correct label positioning.
+     srt = 90,                                # Rotating the labels by 90 degrees.
+     adj = 0.9,                               # Adjusting the labels to 90% right-justified.
+     cex = 0.8)                               # Decreasing the label size.
+```
+
+
+Getting the summary statistics from the box plot
+```{r}
+box_plot$stats
+# The row [3,] in the output shows the median of each box plot
+```
+
+removing delay_TimeOfDay and box_plot from memory
+```{r}
+rm(delay_TimeOfDay)
+rm(box_plot)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
